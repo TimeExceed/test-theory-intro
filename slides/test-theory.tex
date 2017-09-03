@@ -1,0 +1,531 @@
+\documentclass[lualatex]{beamer}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{minted}
+
+\setbeameroption{show notes}
+\usetheme{Madrid}
+\setminted{fontsize=\footnotesize}%fontfamily=Inconsolata,
+
+\title[Theoretical Test Theory]{A Theoretical Introduction to Test Theory,\\And Its Applications}
+  \author{Taoda}
+  \institute{Alibaba Cloud}
+  \date{Sep.\ 2017}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}
+  \frametitle{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{A sample}
+
+\begin{frame}[fragile]
+  \frametitle{A sample}
+
+  \begin{minted}[gobble=4]{python}
+    def test_pk_order_insensitive(self):
+        """...some explanation about what to do"""
+        table_name = 'XXE' + self.get_python_version()
+        table_meta = TableMeta(table_name, [('PK1', 'STRING'), ('PK2', 'INTEGER')])
+        reserved_throughput = ReservedThroughput(CapacityUnit(
+            restriction.MinReadWriteCapacityUnit,
+            restriction.MinReadWriteCapacityUnit
+        ))
+        table_options = TableOptions()
+        self.client_test.create_table(table_meta, table_options, reserved_throughput)
+        self.wait_for_partition_load(table_name)
+ 
+        pks = [('PK2', 123), ('PK1', 'blah')]
+        try:
+            self._check_all_row_op_without_exception(table_name, pks, [('C1', 'V')])
+            self.assertTrue(False)
+        except:
+            pass
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{A sample (cont.)}
+
+  \begin{minted}[gobble=4]{python}
+    def _check_all_row_op_without_exception(self, table_name, pks, cols):
+        cu, row,token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(row, None)
+        
+        row = Row(pks, cols)
+        cu,return_row = self.client_test.put_row(table_name, row, Condition(RowExistenceExpectation.IGNORE))
+        cu, return_row, token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(return_row.primary_key, pks)
+        self.assert_columns(return_row.attribute_columns, cols)
+
+        row = Row(pks, {'put':cols})
+        cu,return_row = self.client_test.update_row(table_name, row, Condition(RowExistenceExpectation.IGNORE))
+        cu, rrow,token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(rrow.primary_key, pks)
+        self.assert_columns(rrow.attribute_columns, cols)
+
+        # other 70 lines
+  \end{minted}
+\end{frame}
+
+\section{The Theory of Test}
+
+\begin{frame}
+  \frametitle{What is testing?}
+
+  \begin{block}{Wikipedia says}
+    Software testing is an investigation conducted to provide stakeholders with \emph{information about the quality} of the software product or service under test.
+  \end{block}
+  \pause
+  \begin{center}
+    \Huge
+    \textcolor{red}{This is wrong!}
+  \end{center}
+\end{frame}
+
+\begin{frame}
+  \frametitle{What is testing?}
+  
+  \begin{block}{I say}
+    A test is an executable specification, which defines behaviour of a trial under a certain type of scenes.
+    \begin{itemize}
+    \item trial
+    \item oracle
+    \item stimulus
+    \item testbench
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Trial}
+
+  \begin{block}{~}
+    \begin{itemize}
+    \item A unit is not a trial, even it is a unit-test.
+    \item An API is a trial.
+    \item So, it is incorrect for a PutRow case to test GetRow/BatchGetRow/filters/...
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Oracle}
+
+  \begin{block}{~}
+    \begin{itemize}
+    \item Oracle is a theoretical concept, which is a marvelling, one-purpose computation device, whenever some inputs are put on it, a result comes up in a flash.
+    \item 3 flavours:
+      \begin{enumerate}
+      \item is-checker
+      \item equal-checker
+      \item verifier
+      \end{enumerate}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Testa}
+
+  \url{https://github.com/TimeExceed/testa}
+
+  \begin{minted}[gobble=4]{erlang}
+    testa:is(
+      fun(_) -> 1 + 2 end,
+      3),
+    testa:eq(
+      fun(_, {X,Y}) -> X*Y end,
+      fun(_, {X,Y}) -> lists:sum([X || _ <- lists:seq(1, Y)]) end,
+      fun(_, X) -> multipleTb(X) end),
+    testa:verify(
+      fun(_, {X,Y}) -> gcd(X, Y) end,
+      fun(_, Result, {X, Y}) ->
+        if (X rem Result =:= 0) and (Y rem Result =:= 0) -> ok;
+           true -> {error, io_lib:format("~p/=gcd(~p,~p)", [Result, X, Y])}
+        end
+      end,
+      fun(_, X) -> gcdtb(X) end)
+  \end{minted}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Testbench \& Stimulus}
+
+  \begin{block}{~}
+    \begin{itemize}
+    \item In EE
+      \begin{itemize}
+      \item stimulus: a sequence of 0-1 on control and data pins
+      \item testbench: a board that provides suitable power, clocks and stimulus
+      \end{itemize}
+    \item in software:
+      \begin{itemize}
+      \item stimulus: concrete scenes of a certain type
+      \item testbench: combines everything into an executable test, and provides stimulus
+      \end{itemize}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Testa}
+
+  \begin{minted}[gobble=4]{erlang}
+    gcdtb_(_, []) -> ok;
+    gcdtb_(Case, [H|T]) -> 
+      case Case(H) of
+        ok -> gcdtb_(Case, T);
+        {error, Msg} -> {error, Msg}
+      end.
+    gcdtb(Case) ->
+      Ins = [{X, Y} || X <- lists:seq(0, 12),
+                       Y <- lists:seq(0, 12),
+                       (X /= 0) or (Y /= 0)],
+      gcdtb_(Case, Ins).
+  \end{minted}
+\end{frame}
+
+\section{Sample Revisit}
+
+\begin{frame}[fragile]
+  \frametitle{A sample}
+
+  \begin{minted}[gobble=4]{python}
+    def test_pk_order_insensitive(self):
+        """...some explanation about what to do"""
+        table_name = 'XXE' + self.get_python_version()
+        table_meta = TableMeta(table_name, [('PK1', 'STRING'), ('PK2', 'INTEGER')])
+        reserved_throughput = ReservedThroughput(CapacityUnit(
+            restriction.MinReadWriteCapacityUnit,
+            restriction.MinReadWriteCapacityUnit
+        ))
+        table_options = TableOptions()
+        self.client_test.create_table(table_meta, table_options, reserved_throughput)
+        self.wait_for_partition_load(table_name)
+ 
+        pks = [('PK2', 123), ('PK1', 'blah')]
+        try:
+            self._check_all_row_op_without_exception(table_name, pks, [('C1', 'V')])
+            self.assertTrue(False)
+        except:
+            pass
+  \end{minted}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{A sample (cont.)}
+
+  \begin{minted}[gobble=4]{python}
+    def _check_all_row_op_without_exception(self, table_name, pks, cols):
+        cu, row,token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(row, None)
+        
+        row = Row(pks, cols)
+        cu,return_row = self.client_test.put_row(table_name, row, Condition(RowExistenceExpectation.IGNORE))
+        cu, return_row, token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(return_row.primary_key, pks)
+        self.assert_columns(return_row.attribute_columns, cols)
+
+        row = Row(pks, {'put':cols})
+        cu,return_row = self.client_test.update_row(table_name, row, Condition(RowExistenceExpectation.IGNORE))
+        cu, rrow,token = self.client_test.get_row(table_name, pks, max_version=1)
+        self.assert_equal(rrow.primary_key, pks)
+        self.assert_columns(rrow.attribute_columns, cols)
+
+        # other 70 lines
+  \end{minted}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Mistakes in the sample}
+
+  \begin{block}{On the good side}
+    \begin{itemize}
+    \item meaningful case name
+    \end{itemize}
+  \end{block}
+  \begin{block}{On the bad side}
+    \begin{itemize}
+    \item no specific trial
+    \item scene is not clear
+    \item mixes trial and oracle
+    \item too long test function
+    \item conclusion: check-change-check anti-pattern
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\section{Good stimulus and good oracle}
+
+\subsection{QuickCheck}
+
+\begin{frame}[fragile]
+  \frametitle{QuickCheck}
+
+  \url{http://www.cse.chalmers.se/~rjmh/QuickCheck/manual.html}
+
+  \begin{block}{correct property}
+    A simple example of a property definition is
+    \begin{minted}[gobble=6]{haskell}
+      prop_RevRev xs = reverse (reverse xs) == xs
+        where types = xs::[Int]
+    \end{minted}
+    To check the property, we load this definition in to hugs and then invoke
+    \begin{minted}[gobble=6]{console}
+      Main> quickCheck prop_RevRev
+      OK, passed 100 tests.
+    \end{minted}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{QuickCheck on incorrect properties}
+
+  \begin{block}{incorrect property}
+    When a property fails, QuickCheck displays a counter-example.
+    For example, if we define
+    \begin{minted}[gobble=4]{haskell}
+      prop_RevId xs = reverse xs == xs
+        where types = xs::[Int]
+    \end{minted}
+    then checking it results in
+    \begin{minted}[gobble=4]{console}
+      Main> quickCheck prop_RevId
+      Falsifiable, after 1 tests:
+      [-3,15]
+    \end{minted}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Good stimulus and good oracle}
+
+  \begin{block}{~}
+    \begin{itemize}
+    \item Good oracle: a certain property, e.g.,
+      \begin{itemize}
+      \item for a storage: what to get is exactly what is written
+      \item for a sort: result in increasing order
+      \end{itemize}
+    \item Good stimulus: verify that property efficiently
+      \begin{itemize}
+      \item randomized methods
+      \item heuristics
+      \end{itemize}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{How to generate a random string for testing}
+
+  \begin{block}{the amateur way}
+    \begin{minted}[gobble=6]{python}
+      def random_str(max_length, alphabet):
+        l = random.randint(0, max_length)
+        return ''.join([random.choice(alphabet) for _ in range(l)])
+    \end{minted}
+  \end{block}
+  \pause
+  \begin{block}{my way}
+    \begin{minted}[gobble=6]{python}
+      def random_str(alphabet, terminator):
+        return ''.join(list(
+          itertools.takewhile(lambda x:x!=terminator,
+            (random.choice(alphabet) for _ in itertools.repeat(None)))))
+    \end{minted}
+    Observation: for a long input which triggers a bug, there is usually a short one to do the same thing.
+  \end{block}
+\end{frame}
+
+\subsection{Pex}
+
+\begin{frame}
+  \frametitle{Pex: a heuristic way to generate stimulus}
+
+  \begin{block}{~}
+    \url{http://research.microsoft.com/Pex}\\
+    \url{http://www.pexforfun.com/}
+  \end{block}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Pex: a heuristic way to generate stimulus}
+
+  \begin{columns}[t]
+    \column{.45\textwidth}
+    \begin{minted}[gobble=6]{c}
+      void Complicated(int x, int y) {
+        if (x == Obfuscate(y))
+          error();
+        else 
+          return;
+      }
+    \end{minted}
+    \column{.45\textwidth}
+    \begin{minted}[gobble=6]{c}
+      int Obfuscate(int y) {
+        return (100+y)*567 % 2347;
+      }
+    \end{minted}
+  \end{columns}
+  
+  \begin{block}{Dynamic symbolic execution, starting from Complicated, runs the code twice}
+    \begin{enumerate}
+    \item Call \mintinline{c}{Complicated()} with arbitrary values, e.g., x=-312, y=513
+      \begin{itemize}
+      \item Record branch condition ``\mintinline{c}{x != (100+y)*567%2347}''
+      \item \mintinline{c}{error()} is not hit
+      \item Compute values such that ``\mintinline{c}{x == (100+y)*567%2347}'' (using constraint solver)
+      \end{itemize}
+    \item Call \mintinline{c}{Complicated()} with computed values
+      \begin{itemize}
+      \item \mintinline{c}{error()} is hit
+      \end{itemize}
+    \end{enumerate}
+  \end{block}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Pex: a heuristic way to generate stimulus}
+
+  \begin{block}{~}
+    Pex is essentially a coverage tool.
+    But when it inlines the oracles, it can also find bugs.
+  \end{block}
+\end{frame}
+
+\section{Delta Debugging}
+
+\begin{frame}
+  \frametitle{Debugging}
+
+  \begin{center}
+    \includegraphics[height=0.8\textheight]{why_program_fails.jpg}
+  \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{A Mozilla case}
+
+  \begin{minted}[gobble=4]{html}
+    <td align=left valign=top>
+    <SELECT NAME="op_sys" MULTIPLE SIZE=7>
+    <OPTION VALUE="All">All<OPTION VALUE="Windows 3.1">Windows 3.1
+    ...
+  \end{minted}
+  \begin{block}{~}
+    In 1999, a Mozilla user reported a crash bug.
+    The report is simple, reproducible and precise,
+    except it contains a 896 lines of HTML.
+    In a BugAThon, this case was reduced to a simple tag \mintinline{html}{<SELECT>}.
+    \pause
+    \begin{center}
+      How did they do?
+    \end{center}
+  \end{block}
+\end{frame}
+
+\begin{frame}[t]
+  \frametitle{Delta Debugging: an example}
+
+  \newcommand{\I}{\textcolor{blue}{|}}
+  \tt
+  \only<1>{~1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}~~9~~10~~11~~12~~13~~14~~15~~16}
+  \only<2>{\I1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}\I~9~~10~~11~~12~~13~~14~~15~~16}
+  \only<3>{~1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}~\I9~~10~~11~~12~~13~~14~~15~~16\I}
+  \only<4->{~1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}~~9~~10~~11~~12~~13~~14~~15~~16}
+
+  \only<4>{~1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}}
+  \only<5>{\I1~~2~~\textcolor{red}{3}~~4\I~5~~6~~7~~\textcolor{red}{8}}
+  \only<6>{~1~~2~~\textcolor{red}{3}~~4~\I5~~6~~7~~\textcolor{red}{8}\I}
+  \only<7>{\I1~~2\I~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}}
+  \only<8->{~1~~2~~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}}
+
+  \only<8>{~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}}
+  \only<9>{\I\textcolor{red}{3}~~4~~5\I~6~~7~~\textcolor{red}{8}}
+  \only<10>{~\textcolor{red}{3}~~4~~5~\I6~~7~~\textcolor{red}{8}\I}
+  \only<11>{\I\textcolor{red}{3}\I~4~~5~~6~~7~~\textcolor{red}{8}}
+  \only<12>{~\textcolor{red}{3}~\I4\I~5~~6~~7~~\textcolor{red}{8}}
+  \only<13->{~\textcolor{red}{3}~~4~~5~~6~~7~~\textcolor{red}{8}}
+
+  \only<13>{~\textcolor{red}{3}~~5~~6~~7~~\textcolor{red}{8}}
+  \only<14>{\I\textcolor{red}{3}~~5\I~6~~7~~\textcolor{red}{8}}
+  \only<15>{~\textcolor{red}{3}~~5~\I6~~7\I~\textcolor{red}{8}}
+  \only<16->{~\textcolor{red}{3}~~5~~6~~7~~\textcolor{red}{8}}
+
+  \only<16>{~\textcolor{red}{3}~~5~~\textcolor{red}{8}}
+  \only<17>{\I\textcolor{red}{3}\I~5~~\textcolor{red}{8}}
+  \only<18>{~\textcolor{red}{3}~\I5\I~\textcolor{red}{8}}
+  \only<19->{~\textcolor{red}{3}~~5~~\textcolor{red}{8}}
+
+  \only<19>{~\textcolor{red}{3}~~\textcolor{red}{8}}
+  \only<20>{\I\textcolor{red}{3}\I~\textcolor{red}{8}}
+  \only<21>{~\textcolor{red}{3}~\I\textcolor{red}{8}\I}
+  \only<22->{~\textcolor{red}{3}~~\textcolor{red}{8}}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Delta Debugging: some experiments}
+
+  \begin{block}{Still long after DD shrinking?}
+    \begin{itemize}
+    \item cache
+    \item nondeterministics (.e.g., randomized or multi-threaded)
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}
+  \frametitle{Conclusion}
+
+  \begin{block}{We present}
+    \begin{itemize}
+    \item The theory of test
+      \begin{itemize}
+      \item trial
+      \item oracle
+      \item testbench
+      \item stimulus
+      \end{itemize}
+      \pause
+    \item How this theory improve readability
+      \begin{itemize}
+      \item Testa
+      \item QuickCheck
+      \end{itemize}
+      \pause
+    \item How this theory improve quality
+      \begin{itemize}
+      \item randomized stimulus generator, binomial distribution
+      \item heuristic stimulus generator, Pex
+      \end{itemize}
+      \pause
+    \item How this theory make debugging efficiently
+      \begin{itemize}
+      \item delta debugging
+      \end{itemize}
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+\section{Q\&A}
+
+\begin{frame}
+  \frametitle{}
+  \begin{center}
+    \Huge
+    Questions?
+  \end{center}
+\end{frame}
+
+\end{document}

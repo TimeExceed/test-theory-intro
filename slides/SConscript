@@ -1,0 +1,6 @@
+# -*- python -*-
+Import('env')
+
+tdd = env.Latex('test-theory.tex')
+env.Default(tdd)
+
