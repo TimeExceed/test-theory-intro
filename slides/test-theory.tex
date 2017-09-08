@@ -143,7 +143,7 @@
     testa:eq(
       fun(_, {X,Y}) -> X*Y end,
       fun(_, {X,Y}) -> lists:sum([X || _ <- lists:seq(1, Y)]) end,
-      fun(_, X) -> multipleTb(X) end),
+      fun(_, X) -> multiplyTb(X) end),
     testa:verify(
       fun(_, {X,Y}) -> gcd(X, Y) end,
       fun(_, Result, {X, Y}) ->
@@ -151,7 +151,7 @@
            true -> {error, io_lib:format("~p/=gcd(~p,~p)", [Result, X, Y])}
         end
       end,
-      fun(_, X) -> gcdtb(X) end)
+      fun(_, X) -> gcdTb(X) end)
   \end{minted}
 \end{frame}
 
@@ -162,12 +162,12 @@
     \begin{itemize}
     \item In EE
       \begin{itemize}
-      \item stimulus: a sequence of 0-1 on control and data pins
+      \item stimulus: a sequence of 0-1 on chip pins
       \item testbench: a board that provides suitable power, clocks and stimulus
       \end{itemize}
     \item in software:
       \begin{itemize}
-      \item stimulus: concrete scenes of a certain type
+      \item stimulus: test inputs of a certain type
       \item testbench: combines everything into an executable test, and provides stimulus
       \end{itemize}
     \end{itemize}
@@ -178,24 +178,24 @@
   \frametitle{Testa}
 
   \begin{minted}[gobble=4]{erlang}
-    gcdtb_(_, []) -> ok;
-    gcdtb_(Case, [H|T]) -> 
-      case Case(H) of
-        ok -> gcdtb_(Case, T);
-        {error, Msg} -> {error, Msg}
-      end.
-    gcdtb(Case) ->
+    gcdTb(Case) ->
       Ins = [{X, Y} || X <- lists:seq(0, 12),
                        Y <- lists:seq(0, 12),
                        (X /= 0) or (Y /= 0)],
-      gcdtb_(Case, Ins).
+      gcdTb_(Case, Ins).
+    gcdTb_(_, []) -> ok;
+    gcdTb_(Case, [H|T]) -> 
+      case Case(H) of
+        ok -> gcdTb_(Case, T);
+        {error, Msg} -> {error, Msg}
+      end.
   \end{minted}
 \end{frame}
 
 \section{Sample Revisit}
 
 \begin{frame}[fragile]
-  \frametitle{A sample}
+  \frametitle{Sample Revisit: on Readability}
 
   \begin{minted}[gobble=4]{python}
     def test_pk_order_insensitive(self):
@@ -220,7 +220,7 @@
 \end{frame}
 
 \begin{frame}[fragile]
-  \frametitle{A sample (cont.)}
+  \frametitle{Sample Revisit: on Readability}
 
   \begin{minted}[gobble=4]{python}
     def _check_all_row_op_without_exception(self, table_name, pks, cols):
@@ -311,8 +311,8 @@
     \begin{itemize}
     \item Good oracle: a certain property, e.g.,
       \begin{itemize}
-      \item for a storage: what to get is exactly what is written
-      \item for a sort: result in increasing order
+      \item for a storage: what to get is exactly what has been written
+      \item for a sort: increasing order
       \end{itemize}
     \item Good stimulus: verify that property efficiently
       \begin{itemize}
@@ -398,7 +398,7 @@
 
   \begin{block}{~}
     Pex is essentially a coverage tool.
-    But when it inlines the oracles, it can also find bugs.
+    But when it inlines oracles, it can also find bugs.
   \end{block}
 \end{frame}
 
@@ -517,8 +517,6 @@
     \end{itemize}
   \end{block}
 \end{frame}
-
-\section{Q\&A}
 
 \begin{frame}
   \frametitle{}
