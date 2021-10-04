@@ -452,7 +452,6 @@ def dockerize(env, target, source, **kwargs):
         assert target.isfile() or not target.exists()
 
         out = sp.check_output(['sudo', 'docker', 'build', '.'], cwd=source.abspath)
-        print out
         match = re.search('Successfully built (\w+)', out)
         assert match
         image = match.group(1)
